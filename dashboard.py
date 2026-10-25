@@ -20,7 +20,7 @@ if "paper" not in st.session_state:
 st.sidebar.title("🚀 מערכת מסחר קריפטו")
 mode = st.sidebar.radio("מצב", ["📊 Live Paper", "🧪 בקטסט היסטורי"])
 
-exchange_id = st.sidebar.selectbox("בורסה", ["bybit", "okx", "binance"], index=0)
+exchange_id = st.sidebar.selectbox("בורסה", ["kraken", "okx", "bybit", "binance"], index=0)
 symbol = st.sidebar.text_input("זוג", "BTC/USDT")
 timeframe = st.sidebar.selectbox("טיימפריים", ["1m", "5m", "15m", "1h", "4h"], index=2)
 leverage = st.sidebar.slider("מינוף (Paper)", 1, 20, 1)
