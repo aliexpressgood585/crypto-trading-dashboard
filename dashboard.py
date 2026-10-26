@@ -10,7 +10,6 @@ import requests
 
 st.set_page_config(page_title="Crypto Trading System", layout="wide", page_icon="🚀")
 
-# Safe session state init / migration
 if "paper" not in st.session_state or "positions" not in st.session_state.get("paper", {}):
     st.session_state.paper = {
         "balance": 1000.0,
@@ -23,23 +22,26 @@ if "paper" not in st.session_state or "positions" not in st.session_state.get("p
 
 DEFAULT_SYMBOLS = [
     "BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT", "ADA/USDT",
-    "DOGE/USDT", "AVAX/USDT", "LINK/USDT", "DOT/USDT", "MATIC/USDT"
+    "DOGE/USDT", "AVAX/USDT", "LINK/USDT", "DOT/USDT", "MATIC/USDT",
+    "UNI/USDT", "ATOM/USDT", "LTC/USDT", "BCH/USDT", "NEAR/USDT",
+    "APT/USDT", "ARB/USDT", "OP/USDT", "SUI/USDT", "INJ/USDT",
+    "FIL/USDT", "ICP/USDT", "RENDER/USDT", "PEPE/USDT", "SHIB/USDT"
 ]
 
 st.sidebar.title("🚀 מערכת מסחר קריפטו")
 mode = st.sidebar.radio("מצב", ["📊 Live Paper", "🧪 בקטסט היסטורי"])
 
 exchange_id = st.sidebar.selectbox("בורסה", ["kraken", "okx", "bybit"], index=0)
-symbols_input = st.sidebar.text_area("מטבעות (אחד בשורה)", "\n".join(DEFAULT_SYMBOLS), height=120)
+symbols_input = st.sidebar.text_area("מטבעות (אחד בשורה)", "\n".join(DEFAULT_SYMBOLS), height=180)
 symbols = [s.strip() for s in symbols_input.split("\n") if s.strip()]
 timeframe = st.sidebar.selectbox("טיימפריים", ["5m", "15m", "1h", "4h"], index=1)
-max_positions = st.sidebar.slider("מקסימום פוזיציות פתוחות", 1, 5, 2)
+max_positions = st.sidebar.slider("מקסימום פוזיציות פתוחות", 1, 8, 3)
 leverage = st.sidebar.slider("מינוף (Paper)", 1, 10, 1)
 futures_mode = st.sidebar.checkbox("Futures (Paper)", False)
 
 strategy = st.sidebar.selectbox("אסטרטגיה", ["מומנטום EMA", "RSI Mean Reversion", "Breakout"])
 
-risk_pct = st.sidebar.slider("סיכון למסחר %", 0.5, 3.0, 1.0) / 100
+risk_pct = st.sidebar.slider("סיכון למסחר %", 0.5, 3.0, 0.8) / 100
 sl_pct = st.sidebar.slider("סטופ לוס %", 0.5, 5.0, 2.0) / 100
 tp_pct = st.sidebar.slider("טייק פרופיט %", 1.0, 10.0, 4.0) / 100
 max_daily_loss = st.sidebar.slider("הפסד יומי מקסימלי %", 2.0, 10.0, 5.0) / 100
@@ -67,7 +69,7 @@ def send_telegram_message(text):
     except Exception:
         pass
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=45)
 def fetch_ohlcv(exchange_id, symbol, timeframe, limit=200):
     try:
         ex = getattr(ccxt, exchange_id)({"enableRateLimit": True})
@@ -123,7 +125,7 @@ if mode == "📊 Live Paper":
     signals = {}
     prices = {}
 
-    for sym in symbols[:8]:
+    for sym in symbols[:15]:  # scan up to 15 to avoid rate limits
         df = fetch_ohlcv(exchange_id, sym, timeframe)
         if df.empty:
             continue
@@ -133,7 +135,6 @@ if mode == "📊 Live Paper":
         prices[sym] = float(df["close"].iloc[-1])
         signals[sym] = get_signal(df, strategy)
 
-    # Manage positions
     for sym, pos in list(paper["positions"].items()):
         price = prices.get(sym)
         if not price:
@@ -156,7 +157,6 @@ if mode == "📊 Live Paper":
                 send_telegram_message(f"סגירה {sym} {reason} PnL:{pnl:.2f}")
                 del paper["positions"][sym]
 
-    # Open new
     if len(paper["positions"]) < max_positions and paper["daily_pnl"] > -paper["balance"] * max_daily_loss:
         for sym, sig in signals.items():
             if len(paper["positions"]) >= max_positions:
@@ -170,7 +170,7 @@ if mode == "📊 Live Paper":
                 size = (paper["balance"] * risk_pct) / (price * sl_pct) * leverage
                 if size > 0:
                     cost = size * price / leverage
-                    if cost < paper["balance"] * 0.9:
+                    if cost < paper["balance"] * 0.85:
                         paper["balance"] -= cost
                         paper["positions"][sym] = {"size": size, "entry": price, "side": "long"}
                         paper["trades"].append({
@@ -195,7 +195,7 @@ if mode == "📊 Live Paper":
     c3.metric("פוזיציות פתוחות", len(paper["positions"]))
     c4.metric("סה\"כ עסקאות", len(paper["trades"]))
 
-    st.subheader("סיגנלים נוכחיים")
+    st.subheader(f"סיגנלים נוכחיים ({len(signals)} מטבעות)")
     if signals:
         sig_df = pd.DataFrame([
             {"מטבע": s, "מחיר": f"${prices.get(s,0):,.2f}", "סיגנל": signals[s]}
@@ -231,10 +231,10 @@ if mode == "📊 Live Paper":
             st.info("מחכה לסיגנלים...")
 
     if auto_refresh:
-        time.sleep(40)
+        time.sleep(50)
         st.rerun()
 
 else:
     st.info("בקטסט רב מטבעות יוסף בגרסה הבאה.")
 
-st.sidebar.caption("סורק כמה מטבעות במקביל. Paper בלבד.")
+st.sidebar.caption("סורק עד 15 מטבעות. Paper בלבד.")
