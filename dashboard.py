@@ -10,17 +10,17 @@ import requests
 
 st.set_page_config(page_title="Crypto Trading System", layout="wide", page_icon="🚀")
 
-if "paper" not in st.session_state:
+# Safe session state init / migration
+if "paper" not in st.session_state or "positions" not in st.session_state.get("paper", {}):
     st.session_state.paper = {
         "balance": 1000.0,
-        "positions": {},  # symbol -> {size, entry, side}
+        "positions": {},
         "trades": [],
         "equity_history": [1000.0],
         "daily_pnl": 0.0,
         "total_pnl": 0.0,
     }
 
-# Top liquid pairs (Kraken compatible)
 DEFAULT_SYMBOLS = [
     "BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT", "ADA/USDT",
     "DOGE/USDT", "AVAX/USDT", "LINK/USDT", "DOT/USDT", "MATIC/USDT"
@@ -123,8 +123,7 @@ if mode == "📊 Live Paper":
     signals = {}
     prices = {}
 
-    # Scan all symbols
-    for sym in symbols[:8]:  # limit to avoid rate limits
+    for sym in symbols[:8]:
         df = fetch_ohlcv(exchange_id, sym, timeframe)
         if df.empty:
             continue
@@ -134,7 +133,7 @@ if mode == "📊 Live Paper":
         prices[sym] = float(df["close"].iloc[-1])
         signals[sym] = get_signal(df, strategy)
 
-    # Manage existing positions
+    # Manage positions
     for sym, pos in list(paper["positions"].items()):
         price = prices.get(sym)
         if not price:
@@ -157,7 +156,7 @@ if mode == "📊 Live Paper":
                 send_telegram_message(f"סגירה {sym} {reason} PnL:{pnl:.2f}")
                 del paper["positions"][sym]
 
-    # Open new positions
+    # Open new
     if len(paper["positions"]) < max_positions and paper["daily_pnl"] > -paper["balance"] * max_daily_loss:
         for sym, sig in signals.items():
             if len(paper["positions"]) >= max_positions:
@@ -181,7 +180,6 @@ if mode == "📊 Live Paper":
                         })
                         send_telegram_message(f"פתיחת LONG {sym} @ {price:.2f}")
 
-    # Equity
     unrealized = 0
     for sym, pos in paper["positions"].items():
         price = prices.get(sym, pos["entry"])
@@ -191,14 +189,12 @@ if mode == "📊 Live Paper":
     if len(paper["equity_history"]) > 200:
         paper["equity_history"] = paper["equity_history"][-200:]
 
-    # Metrics
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("יתרה", f"${paper['balance']:,.2f}")
     c2.metric("Equity", f"${current_equity:,.2f}", delta=f"{current_equity-1000:.1f}")
     c3.metric("פוזיציות פתוחות", len(paper["positions"]))
     c4.metric("סה\"כ עסקאות", len(paper["trades"]))
 
-    # Signals table
     st.subheader("סיגנלים נוכחיים")
     if signals:
         sig_df = pd.DataFrame([
@@ -209,7 +205,6 @@ if mode == "📊 Live Paper":
     else:
         st.info("לא נמצאו נתונים. נסה שוב בעוד כמה שניות.")
 
-    # Open positions
     if paper["positions"]:
         st.subheader("פוזיציות פתוחות")
         pos_rows = []
@@ -240,6 +235,6 @@ if mode == "📊 Live Paper":
         st.rerun()
 
 else:
-    st.info("בקטסט רב מטבעות יוסף בגרסה הבאה. כרגע השתמש במצב Live Paper.")
+    st.info("בקטסט רב מטבעות יוסף בגרסה הבאה.")
 
 st.sidebar.caption("סורק כמה מטבעות במקביל. Paper בלבד.")
